@@ -30,20 +30,15 @@ int BPF_PROG(block_dangerous_sockets,
 	    int family,
 	    int type,
 	    int protocol,
-	    int kern,
-	    int ret)
+	    int kern)
 {
-	/* Copy-Fail mitigation */
-	if (family == AF_ALG)
+	if (family == AF_ALG)      /* Copy-Fail */
 		return -EPERM;
-
-	/* DirtyFrag RxRPC path mitigation */
-	if (family == AF_RXRPC)
+	if (family == AF_RXRPC)    /* DirtyFrag RxRPC path */
 		return -EPERM;
-
-	/* DirtyFrag xfrm-ESP path mitigation */
-	if (family == AF_NETLINK && protocol == NETLINK_XFRM)
+	if (family != AF_NETLINK)
+		return 0;
+	if (protocol == NETLINK_XFRM) /* DirtyFrag xfrm-ESP path */
 		return -EPERM;
-
 	return 0;
 }

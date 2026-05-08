@@ -5,23 +5,15 @@ REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 BINARY_NAME := copyfail
 
-REGISTRY ?= docker.io/oxeva
+REGISTRY ?= <your-registry>
 TAG      ?= latest
-PUSH     := 1
-LOAD     := 0
-BUILDER  ?=
-PLATFORM ?=
-BUILDX_EXTRA_ARGS ?=
 
-BUILDX_ARGS := --provenance=false --push=$(PUSH) --load=$(LOAD) \
-  --label org.opencontainers.image.source=https://github.com/odoucet/copyfail-dirtyfrag-blocker \
-  $(if $(strip $(BUILDER)),--builder=$(BUILDER)) \
-  $(if $(strip $(PLATFORM)),--platform=$(PLATFORM)) \
-  $(BUILDX_EXTRA_ARGS)
+BUILDX_ARGS := --provenance=false --load \
+  --label org.opencontainers.image.source=https://github.com/odoucet/copyfail-dirtyfrag-blocker
 
-GO        := go
-GOFLAGS   := -trimpath
-LDFLAGS   := -s -w -X main.Version=$(VERSION) -X main.Revision=$(REVISION)
+GO      := go
+GOFLAGS := -trimpath
+LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.Revision=$(REVISION)
 
 ##@ Build
 
@@ -36,15 +28,16 @@ build: generate ## Build the daemon binary
 ##@ Container
 
 .PHONY: image
-image: ## Build container image and push
+image: ## Build container image locally (then run: docker push REGISTRY/BINARY_NAME:TAG)
 	docker buildx build . \
 		--file Containerfile \
 		--tag $(REGISTRY)/$(BINARY_NAME):$(TAG) \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg REVISION=$(REVISION) \
-		--cache-from type=registry,ref=$(REGISTRY)/$(BINARY_NAME):latest \
-		--cache-to type=inline \
 		$(BUILDX_ARGS)
+	@echo ""
+	@echo "Image built. To push:"
+	@echo "  docker push $(REGISTRY)/$(BINARY_NAME):$(TAG)"
 
 ##@ Misc
 

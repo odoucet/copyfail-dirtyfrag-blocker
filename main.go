@@ -19,7 +19,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpfel -cc clang -go-package main blocker bpf/blocker.c -- -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu -I/usr/include/aarch64-linux-gnu -I/usr/include
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpfel -cc clang -go-package main blocker bpf/blocker.c -- -O1 -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu -I/usr/include/aarch64-linux-gnu -I/usr/include
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
