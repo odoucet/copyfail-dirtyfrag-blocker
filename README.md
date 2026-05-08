@@ -16,6 +16,11 @@ Tested on Talos Linux (which ships with `CONFIG_BPF_LSM=y` and `bpf` in the
 default LSM stack since v1.10), works on any distribution with the same
 kernel configuration.
 
+## DISCLAIMER
+
+The current version (may 8th) is not perfect, because on some Kubernetes installations, new pods may stay in "pending" status if you use Cilium.
+I'm currently investigating the issue. See explanation below.
+
 ## Why
 
 See https://github.com/cozystack/copy-fail-blocker and https://github.com/V4bel/dirtyfrag
