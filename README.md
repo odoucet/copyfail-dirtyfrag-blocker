@@ -61,10 +61,24 @@ OK: NETLINK_XFRM blocked or unavailable: errno=1 [Errno 1] Operation not permitt
 ## Build
 
 ```sh
-make image                                       # docker buildx build + push
-make image REGISTRY=ghcr.io/myorg TAG=v0.2.1     # custom tag
-make image PUSH=0 LOAD=1                         # build locally without pushing
+make image REGISTRY=myregistry.example.com TAG=v1.0
+docker push myregistry.example.com/copyfail:v1.0
 ```
+
+## Known legitimate users of the blocked socket families
+
+Deploying this blocker may break software that legitimately uses these socket
+families. Audit your nodes before deploying.
+
+| Socket | Legitimate users | Risk |
+|--------|-----------------|------|
+| `AF_ALG` | `cryptsetup` / LUKS, OpenSSL with `af_alg` engine, `libkcapi` | Low on Kubernetes nodes — disk encryption is handled at the host level, not inside pods |
+| `AF_RXRPC` | `OpenAFS` / `kafs` (Andrew File System) | Very low — AFS is rare in modern environments |
+| `NETLINK_XFRM` | `strongSwan`, `Libreswan`, `ip xfrm` (iproute2), **Calico with IPsec**, **Cilium with IPsec** | **High if your CNI uses IPsec for pod-to-pod encryption** — this will break it |
+
+In practice, `AF_RXRPC` is safe to block everywhere. `NETLINK_XFRM` is the
+most impactful: if your cluster uses a CNI in IPsec mode (Calico, Cilium),
+do not deploy this blocker without disabling the `NETLINK_XFRM` rule first.
 
 ## Limitations
 
