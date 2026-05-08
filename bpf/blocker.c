@@ -33,9 +33,6 @@ int BPF_PROG(block_dangerous_sockets,
 	    int kern,
 	    int ret)
 {
-	if (ret)
-		return ret;
-
 	/* Copy-Fail mitigation */
 	if (family == AF_ALG)
 		return -EPERM;
