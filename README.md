@@ -44,16 +44,18 @@ for name, family, typ, proto in tests:
     try:
         s = socket.socket(family, typ, proto)
         s.close()
-        print(f"FAIL: {name} autorisé")
+        print(f"FAIL: {name} authorized")
     except OSError as e:
-        print(f"OK: {name} bloqué ou indisponible: errno={e.errno} {e}")
+        print(f"OK: {name} blocked or unavailable: errno={e.errno} {e}")
 PY
 ```
 
-Expected output:
+Expected output (OK for all three lines):
 
 ```
-OK: [Errno 1] Operation not permitted
+OK: AF_ALG blocked or unavailable: errno=1 [Errno 1] Operation not permitted
+OK: AF_RXRPC blocked or unavailable: errno=97 [Errno 1] Operation not permitted
+OK: NETLINK_XFRM blocked or unavailable: errno=1 [Errno 1] Operation not permitted
 ```
 
 ## Build
