@@ -34,7 +34,9 @@ func main() {
 	}
 	defer objs.Close()
 
-	lnk, err := link.AttachLSM(link.LSMOptions{Program: objs.BlockAfAlg})
+	lnk, err := link.AttachLSM(link.LSMOptions{
+		Program: objs.BlockDangerousSockets,
+	})
 	if err != nil {
 		log.Fatalf("attach LSM hook: %v", err)
 	}
@@ -44,7 +46,7 @@ func main() {
 		}
 	}()
 
-	log.Println("BPF-LSM hook attached on socket_create; AF_ALG denied with EPERM")
+	log.Println("BPF-LSM hook attached: blocking AF_ALG, AF_RXRPC and NETLINK_XFRM")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)

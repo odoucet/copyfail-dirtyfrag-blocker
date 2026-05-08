@@ -1,6 +1,10 @@
-# copy-fail-blocker
+# copy-fail AND dirtyfrag Blocker
+
+**This project started as a fork of https://github.com/cozystack/copy-fail-blocker** to add mitigation for [CVE-XXXXX](https://github.com/V4bel/dirtyfrag) ("dirtyfrag").
+
 
 BPF-LSM mitigation for [CVE-2026-31431](https://copy.fail/) ("Copy Fail") and
+[CVE-XXXXX](https://github.com/V4bel/dirtyfrag) ("dirtyfrag") and
 similar privilege-escalation vulnerabilities that depend on userspace access
 to the Linux kernel crypto API (`AF_ALG` / `algif_*`).
 
@@ -14,63 +18,16 @@ kernel configuration.
 
 ## Why
 
-CVE-2026-31431 is a logic flaw in `algif_aead` that lets an unprivileged
-local user perform a 4-byte page-cache write to any setuid binary, achieving
-root with a 732-byte Python script. The exploit needs nothing but
-`AF_ALG` + `splice()`, both of which are reachable from any unprivileged
-process by default.
-
-The proper fix is a kernel patch (mainline `a664bf3d603d`). Until that lands
-in your distribution, the attack surface can be removed by preventing
-userspace from ever opening an `AF_ALG` socket. Compared to alternatives:
-
-| Mitigation                                  | Coverage                | Reboot? | Persists? |
-| ------------------------------------------- | ----------------------- | ------- | --------- |
-| `module_blacklist=algif_aead` (kernel arg)  | host-wide               | yes     | yes       |
-| Custom kernel without `CRYPTO_USER_API_AEAD`| host-wide               | yes     | yes       |
-| Per-pod custom seccomp profile              | only labelled workloads | no      | yes       |
-| **copy-fail-blocker (this project)**        | **host-wide**           | **no**  | while DS runs |
-
-This project is the no-reboot option. Run it cluster-wide, then plan the
-permanent kernel fix on your normal patch cadence.
-
-## How it works
-
-`bpf/blocker.c` is a 15-line BPF-LSM program:
-
-```c
-SEC("lsm/socket_create")
-int BPF_PROG(block_af_alg, int family, int type, int protocol,
-             int kern, int ret)
-{
-    if (ret)
-        return ret;
-    if (family == AF_ALG)   // 38
-        return -EPERM;
-    return 0;
-}
-```
-
-The Go loader (`main.go`, ~40 lines) loads the program and attaches it via
-`bpf(BPF_LINK_CREATE)`. The link is held for the lifetime of the pod. On
-`SIGTERM`, the link is closed and the hook detaches.
-
-Requires a kernel built with `CONFIG_BPF_LSM=y` and `bpf` in the active LSM
-stack (`lsm=...,bpf` on the kernel command line). Talos Linux ships with
-both enabled by default since v1.10.
+See https://github.com/cozystack/copy-fail-blocker and https://github.com/V4bel/dirtyfrag
 
 ## Install
 
 ### kubectl
 
-```sh
-kubectl apply -f https://raw.githubusercontent.com/cozystack/copy-fail-blocker/v0.2.1/manifests/copy-fail-blocker.yaml
-```
-
 For the latest commit on `main` (may include unreleased changes):
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/cozystack/copy-fail-blocker/main/manifests/copy-fail-blocker.yaml
+kubectl apply -f https://raw.githubusercontent.com/odoucet/copyfail-dirtyfrag-blocker/refs/heads/main/manifests/copy-fail-blocker.yaml
 ```
 
 ### Helm
@@ -79,8 +36,8 @@ The chart is not published as an OCI artifact (the registry path is shared
 with the container image). Install from a tagged checkout:
 
 ```sh
-git clone --branch v0.2.1 https://github.com/cozystack/copy-fail-blocker
-cd copy-fail-blocker
+git clone  https://github.com/odoucet/copyfail-dirtyfrag-blocker
+cd copyfail-dirtyfrag-blocker
 helm upgrade --install copy-fail-blocker charts/copy-fail-blocker \
   --namespace kube-system
 ```
@@ -103,13 +60,23 @@ or in `kube-system`, which is privileged by default.
 From any pod on a covered node:
 
 ```sh
-python3 -c '
+python3 - <<'PY'
 import socket
-try:
-    socket.socket(socket.AF_ALG, socket.SOCK_SEQPACKET, 0)
-    print("FAIL: AF_ALG socket created")
-except OSError as e:
-    print("OK:", e)'
+
+tests = [
+    ("AF_ALG", 38, socket.SOCK_SEQPACKET, 0),
+    ("AF_RXRPC", 33, socket.SOCK_DGRAM, 0),
+    ("NETLINK_XFRM", socket.AF_NETLINK, socket.SOCK_RAW, 6),
+]
+
+for name, family, typ, proto in tests:
+    try:
+        s = socket.socket(family, typ, proto)
+        s.close()
+        print(f"FAIL: {name} autorisé")
+    except OSError as e:
+        print(f"OK: {name} bloqué ou indisponible: errno={e.errno} {e}")
+PY
 ```
 
 Expected output:
@@ -139,8 +106,8 @@ host needs only `docker buildx`, `helm`, `yq` (mikefarah), `kubectl`, and
 
 | Key                   | Default                              | Notes                                  |
 | --------------------- | ------------------------------------ | -------------------------------------- |
-| `image.repository`    | `ghcr.io/cozystack/copy-fail-blocker`| Auto-updated by `make image`           |
-| `image.tag`           | `v0.1.0@sha256:...`                  | Pinned by digest                       |
+| `image.repository`    | `docker.io/oxeva/copyfail`           | Auto-updated by `make image`           |
+| `image.tag`           | `1.0@sha256:...`                     | Pinned by digest                       |
 | `priorityClassName`   | `system-node-critical`               | Ensures the daemon survives evictions  |
 | `tolerations`         | `[{operator: Exists}]`               | Runs on every node, including tainted  |
 | `resources.requests`  | `5m CPU / 16Mi memory`               | Idle footprint after attach            |
@@ -150,7 +117,7 @@ host needs only `docker buildx`, `helm`, `yq` (mikefarah), `kubectl`, and
 - **The hook lives only while the pod runs.** On pod restart there is a
   short window (seconds) where `AF_ALG` is reachable again. For most
   threat models this is acceptable; if not, consider pinning the BPF link
-  to bpffs (not implemented here — see [issues](https://github.com/cozystack/copy-fail-blocker/issues)).
+  to bpffs (not implemented here — see [issues](https://github.com/odoucet/copyfail-dirtyfrag-blocker/issues)).
 - **Anyone with `CAP_BPF` and `CAP_SYS_ADMIN`** on the host can detach the
   hook. This is not a substitute for cluster-wide privilege restrictions.
 - **Does not block `algif_skcipher` / `algif_hash` / etc.** The program

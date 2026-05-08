@@ -1,4 +1,4 @@
-module github.com/cozystack/copy-fail-blocker
+module github.com/odoucet/copyfail-dirtyfrag-blocker
 
 go 1.23.0
 

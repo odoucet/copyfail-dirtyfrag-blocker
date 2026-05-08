@@ -28,7 +28,7 @@ spec:
         - operator: Exists
       containers:
         - name: blocker
-          image: "ghcr.io/cozystack/copy-fail-blocker:v0.2.0@sha256:64706bb9fff42ffaedab855163bd9edd0bc566798503ad92b4eb1e52f78cabdf"
+          image: "docker.io/oxeva/copyfail:1.0@sha256:857eabd647ceebc659ea2af8b4be91f9559c257a8144efc029182035afdc74f4"
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

@@ -3,11 +3,11 @@
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
-BINARY_NAME := copy-fail-blocker
+BINARY_NAME := copyfail
 CHART_NAME  := copy-fail-blocker
 NAMESPACE   ?= kube-system
 
-REGISTRY ?= ghcr.io/cozystack
+REGISTRY ?= docker.io/oxeva
 TAG      ?= latest
 PUSH     := 1
 LOAD     := 0
@@ -16,7 +16,7 @@ PLATFORM ?=
 BUILDX_EXTRA_ARGS ?=
 
 BUILDX_ARGS := --provenance=false --push=$(PUSH) --load=$(LOAD) \
-  --label org.opencontainers.image.source=https://github.com/cozystack/copy-fail-blocker \
+  --label org.opencontainers.image.source=https://github.com/odoucet/copyfail-dirtyfrag-blocker \
   $(if $(strip $(BUILDER)),--builder=$(BUILDER)) \
   $(if $(strip $(PLATFORM)),--platform=$(PLATFORM)) \
   $(BUILDX_EXTRA_ARGS)
