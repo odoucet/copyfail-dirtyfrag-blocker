@@ -22,38 +22,9 @@ See https://github.com/cozystack/copy-fail-blocker and https://github.com/V4bel/
 
 ## Install
 
-### kubectl
+I kept this project simple, just to compile a docker image with the fix.
 
-For the latest commit on `main` (may include unreleased changes):
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/odoucet/copyfail-dirtyfrag-blocker/refs/heads/main/manifests/copy-fail-blocker.yaml
-```
-
-### Helm
-
-The chart is not published as an OCI artifact (the registry path is shared
-with the container image). Install from a tagged checkout:
-
-```sh
-git clone  https://github.com/odoucet/copyfail-dirtyfrag-blocker
-cd copyfail-dirtyfrag-blocker
-helm upgrade --install copy-fail-blocker charts/copy-fail-blocker \
-  --namespace kube-system
-```
-
-Or via the Makefile shortcuts:
-
-```sh
-make apply         # helm upgrade --install into kube-system
-make diff          # preview changes against the cluster
-make delete        # uninstall
-make manifest      # regenerate manifests/copy-fail-blocker.yaml
-```
-
-The DaemonSet must run privileged (it loads BPF programs and writes to
-bpffs). Place it in a namespace with the privileged Pod Security Standard,
-or in `kube-system`, which is privileged by default.
+To deploy on kubernetes, refer to project https://github.com/cozystack/copy-fail-blocker and use the image from this repository instead of theirs.
 
 ## Verify
 
@@ -92,25 +63,6 @@ make image                                       # docker buildx build + push
 make image REGISTRY=ghcr.io/myorg TAG=v0.2.1     # custom tag
 make image PUSH=0 LOAD=1                         # build locally without pushing
 ```
-
-`make image` updates `charts/copy-fail-blocker/values.yaml` with the
-resolved image digest so the chart always pins by digest.
-
-Build dependencies live in the Containerfile (clang, libbpf-dev, Go). Local
-host needs only `docker buildx`, `helm`, `yq` (mikefarah), `kubectl`, and
-`helm-diff`.
-
-## Configuration
-
-`charts/copy-fail-blocker/values.yaml`:
-
-| Key                   | Default                              | Notes                                  |
-| --------------------- | ------------------------------------ | -------------------------------------- |
-| `image.repository`    | `docker.io/oxeva/copyfail`           | Auto-updated by `make image`           |
-| `image.tag`           | `1.0@sha256:...`                     | Pinned by digest                       |
-| `priorityClassName`   | `system-node-critical`               | Ensures the daemon survives evictions  |
-| `tolerations`         | `[{operator: Exists}]`               | Runs on every node, including tainted  |
-| `resources.requests`  | `5m CPU / 16Mi memory`               | Idle footprint after attach            |
 
 ## Limitations
 

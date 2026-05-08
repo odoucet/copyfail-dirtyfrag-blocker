@@ -4,8 +4,6 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "de
 REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 BINARY_NAME := copyfail
-CHART_NAME  := copy-fail-blocker
-NAMESPACE   ?= kube-system
 
 REGISTRY ?= docker.io/oxeva
 TAG      ?= latest
@@ -24,8 +22,6 @@ BUILDX_ARGS := --provenance=false --push=$(PUSH) --load=$(LOAD) \
 GO        := go
 GOFLAGS   := -trimpath
 LDFLAGS   := -s -w -X main.Version=$(VERSION) -X main.Revision=$(REVISION)
-HELM      := helm
-KUBECTL   := kubectl
 
 ##@ Build
 
@@ -40,7 +36,7 @@ build: generate ## Build the daemon binary
 ##@ Container
 
 .PHONY: image
-image: ## Build container image, push, update chart values.yaml and rendered manifest
+image: ## Build container image and push
 	docker buildx build . \
 		--file Containerfile \
 		--tag $(REGISTRY)/$(BINARY_NAME):$(TAG) \
@@ -48,50 +44,7 @@ image: ## Build container image, push, update chart values.yaml and rendered man
 		--build-arg REVISION=$(REVISION) \
 		--cache-from type=registry,ref=$(REGISTRY)/$(BINARY_NAME):latest \
 		--cache-to type=inline \
-		--metadata-file .build-metadata.json \
 		$(BUILDX_ARGS)
-	@REPOSITORY="$(REGISTRY)/$(BINARY_NAME)" \
-		yq -i '.image.repository = strenv(REPOSITORY)' charts/$(CHART_NAME)/values.yaml
-	@TAG=$(TAG)@$$(yq e '."containerimage.digest"' .build-metadata.json -o json -r 2>/dev/null || echo $(TAG)) \
-		yq -i '.image.tag = strenv(TAG)' charts/$(CHART_NAME)/values.yaml
-	@rm -f .build-metadata.json
-	@$(MAKE) --no-print-directory manifest
-
-.PHONY: manifest
-manifest: ## Render Helm chart to manifests/copy-fail-blocker.yaml
-	@mkdir -p manifests
-	$(HELM) template $(CHART_NAME) charts/$(CHART_NAME) --namespace $(NAMESPACE) \
-		> manifests/$(CHART_NAME).yaml
-
-##@ Helm
-
-.PHONY: helm-lint
-helm-lint: ## Lint Helm chart
-	$(HELM) lint charts/$(CHART_NAME)
-
-.PHONY: helm-package
-helm-package: ## Package Helm chart
-	$(HELM) package charts/$(CHART_NAME)
-
-.PHONY: show
-show: ## Show rendered Helm templates
-	$(HELM) template $(CHART_NAME) charts/$(CHART_NAME) --namespace $(NAMESPACE)
-
-##@ Deploy
-
-.PHONY: apply
-apply: ## Install/upgrade Helm release on the current Kubernetes cluster
-	$(HELM) upgrade --install $(CHART_NAME) charts/$(CHART_NAME) \
-		--namespace $(NAMESPACE) --create-namespace
-
-.PHONY: diff
-diff: ## Diff Helm release against objects in the cluster
-	$(HELM) diff upgrade $(CHART_NAME) charts/$(CHART_NAME) \
-		--namespace $(NAMESPACE) --allow-unreleased
-
-.PHONY: delete
-delete: ## Uninstall Helm release
-	$(HELM) uninstall $(CHART_NAME) --namespace $(NAMESPACE)
 
 ##@ Misc
 
