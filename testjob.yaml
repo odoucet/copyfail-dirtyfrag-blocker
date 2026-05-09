@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: copyfail-dirtyfrag-test
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+        - name: test
+          image: python:3-slim
+          command:
+            - python3
+            - -c
+            - |
+              import socket, sys
+
+              tests = [
+                  ("AF_ALG",        38,                 socket.SOCK_SEQPACKET, 0),
+                  ("AF_RXRPC",      33,                 socket.SOCK_DGRAM,     0),
+                  ("NETLINK_XFRM",  socket.AF_NETLINK,  socket.SOCK_RAW,       6),
+              ]
+
+              failed = False
+              for name, family, typ, proto in tests:
+                  try:
+                      s = socket.socket(family, typ, proto)
+                      s.close()
+                      print(f"FAIL: {name} authorized")
+                      failed = True
+                  except OSError as e:
+                      print(f"OK: {name} blocked or unavailable: errno={e.errno} {e}")
+
+              sys.exit(1 if failed else 0)
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi

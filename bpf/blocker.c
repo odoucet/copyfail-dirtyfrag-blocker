@@ -32,6 +32,25 @@ int BPF_PROG(block_dangerous_sockets,
 	    int protocol,
 	    int kern)
 {
+	/* Allow host-root processes: legitimate system daemons (Cilium/Calico
+	 * IPsec, strongSwan) run as UID 0 and need these socket families.
+	 * The exploits only provide value to unprivileged processes seeking
+	 * privilege escalation.
+	 *
+	 * WARNING — user namespace remapping: bpf_get_current_uid_gid()
+	 * returns the UID translated into the task's own user namespace, NOT
+	 * the initial (host) user namespace. On clusters with user namespace
+	 * remapping enabled (Kubernetes ≥ 1.30 opt-in), a container whose
+	 * in-namespace UID is 0 but whose host UID is non-zero will still
+	 * pass this check — and that container CAN use these CVEs to reach
+	 * host root via kernel code execution. User namespaces do not prevent
+	 * kernel exploits. To close this gap the host UID must be read via
+	 * BPF CO-RE (task->cred->uid.val), which requires vmlinux BTF. This
+	 * cluster does not use user namespace remapping, so the current check
+	 * is sufficient, but the limitation must be understood. */
+	if ((__u32)bpf_get_current_uid_gid() == 0)
+		return 0;
+
 	if (family == AF_ALG)      /* Copy-Fail */
 		return -EPERM;
 	if (family == AF_RXRPC)    /* DirtyFrag RxRPC path */

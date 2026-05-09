@@ -16,10 +16,6 @@ Tested on Talos Linux (which ships with `CONFIG_BPF_LSM=y` and `bpf` in the
 default LSM stack since v1.10), works on any distribution with the same
 kernel configuration.
 
-## DISCLAIMER
-
-The current version (may 8th) is not perfect, because on some Kubernetes installations, new pods may stay in "pending" status if you use Cilium.
-I'm currently investigating the issue. See explanation below.
 
 ## Why
 
@@ -59,8 +55,22 @@ Expected output (OK for all three lines):
 
 ```
 OK: AF_ALG blocked or unavailable: errno=1 [Errno 1] Operation not permitted
-OK: AF_RXRPC blocked or unavailable: errno=97 [Errno 1] Operation not permitted
+OK: AF_RXRPC blocked or unavailable: errno=1 [Errno 1] Operation not permitted
 OK: NETLINK_XFRM blocked or unavailable: errno=1 [Errno 1] Operation not permitted
+```
+
+The script must run as a **non-root user** — root is intentionally allowed through
+(see [Limitations](#limitations)).
+
+### Kubernetes Job
+
+A ready-to-use Job is provided in [`testjob.yaml`](testjob.yaml). It runs as
+UID 1000 and exits with code 1 if any socket is not blocked:
+
+```sh
+kubectl apply -f testjob.yaml
+kubectl wait --for=condition=complete job/copyfail-dirtyfrag-test --timeout=60s
+kubectl logs job/copyfail-dirtyfrag-test
 ```
 
 ## Build
@@ -99,6 +109,19 @@ do not deploy this blocker without disabling the `NETLINK_XFRM` rule first.
   `bind()` and inspect `salg_type`), this is straightforward to add.
 - **No effect on processes that already hold an open `AF_ALG` socket.**
   Existing sockets keep working until closed.
+- **Root bypass is unsafe with Kubernetes user namespace remapping.**
+  The hook allows root (UID 0) through to preserve compatibility with
+  system daemons (Cilium, strongSwan). However, `bpf_get_current_uid_gid()`
+  returns the UID in the *task's own user namespace*, not the host namespace.
+  On clusters with user namespace remapping enabled (Kubernetes ≥ 1.30,
+  opt-in), a container whose in-namespace UID is 0 but whose host UID is
+  non-zero will pass this check unblocked — and can still exploit these CVEs
+  to reach host root via kernel code execution. User namespaces do not
+  protect against kernel exploits. The proper fix is to read the host UID
+  via BPF CO-RE (`task->cred->uid.val`) instead of
+  `bpf_get_current_uid_gid()`, but this requires `vmlinux` BTF and is not
+  yet implemented. **Do not rely on this blocker as the sole mitigation on
+  clusters with user namespace remapping enabled.**
 
 ## License
 
